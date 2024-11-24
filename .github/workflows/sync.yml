@@ -1,0 +1,60 @@
+name: 'Upstream Sync'
+
+on:
+  push:
+    branches: [ workflows ]
+  schedule:
+    - cron:  '0 0 */15 * *'
+    # 每15天同步一次
+
+  workflow_dispatch:  # 点击GitHub仓库中的按钮启动！
+    inputs:
+      sync_test_mode: # 添加一个布尔选项，在手动运行工作流程时出现，便于测试模式配置
+        description: 'Fork同步测试模式'
+        type: boolean
+        default: false
+      # 添加一个输入框，在手动运行工作流程时出现，便输入shallow_since
+      shallow_since: 
+        description: 'shallow_since'
+        type: string
+        default: '15 days ago'
+
+jobs:
+  sync_latest_from_upstream:
+    runs-on: ubuntu-latest
+    
+    steps:
+    # 必要步骤
+    # 步骤1：运行GitHub提供的标准检出操作
+    - name: Checkout target repo
+      uses: actions/checkout@v3
+      with:
+        ref: master
+        token: ${{ secrets.PERSONAL_TOKEN }}
+
+    # 必要步骤
+    # 步骤2：运行同步操作
+    - name: Sync upstream changes
+      id: sync
+      uses: aormsby/Fork-Sync-With-Upstream-action@v3.4.1
+      with:
+        target_sync_branch: master
+        # 必需的'target_repo_token'，必须这样写！
+        target_repo_token: ${{ secrets.PERSONAL_TOKEN }}
+        upstream_sync_branch: master
+        upstream_sync_repo: wxxxcxx/ms-ra-forwarder
+        shallow_since: ${{ inputs.shallow_since }}
+        # 在手动触发时设置test_mode为true，以运行测试而非真正的操作！
+        test_mode: ${{ inputs.sync_test_mode }}
+      
+    # 步骤3：根据同步输出变量'has_new_commits'显示一条示例消息
+    - name: New commits found
+      if: steps.sync.outputs.has_new_commits == 'true'
+      run: echo "发现了要同步的新提交。"
+    
+    - name: No new commits
+      if: steps.sync.outputs.has_new_commits == 'false'
+      run: echo "没有新提交。"
+      
+    - name: Show value of 'has_new_commits'
+      run: echo ${{ steps.sync.outputs.has_new_commits }}
